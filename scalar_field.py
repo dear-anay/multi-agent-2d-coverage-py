@@ -39,10 +39,9 @@ def deforming(x, y, i):
     return np.linalg.norm(
         [
         moving_mountain(x / 1.2, y, i),
-        moving_mountain(x + y, x - y, i * 1.1),
-        moving_mountain(x - y/2, x + y/2, i * 1.2), 
-        moving_mountain(x/2 - y, x + y/2, i / 1.2 +
-            PERIOD / 2),
+        #moving_mountain(x + y, x - y, i * 1.1),
+        #moving_mountain(x - y/2, x + y/2, i * 1.2), 
+        #moving_mountain(x/2 - y, x + y/2, i / 1.2 + PERIOD / 2),
         ]
     )
 

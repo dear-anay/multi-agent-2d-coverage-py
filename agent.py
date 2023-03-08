@@ -2,25 +2,83 @@ import scalar_field
 from constants import *
 import numpy as np 
 import math
+import copy
 
 class Agent:
-    def __init__(self):
-        self.p = np.array([float(INITIAL_X), float(INITIAL_Y)])
+    def __init__(self, x, y, color, angle):
+        self.p = np.array([float(x), float(y)])
 
-        self.angle = 0
-        self.e = np.array([1., 0.])
+        self.angle = angle
+        self.e = np.array([math.cos(self.angle), math.sin(self.angle)])
+        self.vision = VISION
+        self.color = color
 
         #TODO convert meters per second to this custom scale
-        self.vmax = 0.8 #distance per frame
+        self.vmax = 1 #distance per frame
         self.v = self.vmax
 
+        self.track = []
         self.prev_f = None
         
-        self.we = 0.5
+        self.we = 0.2
         self.mu = 0.8
-        self.f_delta_max = 2
+        self.f_delta_max = 0.1
 
-    def update(self, field_func, t):
+    def updated(old, field_func, t, agents):
+        assert isinstance(agents, list)
+        self = copy.deepcopy(old)
+
+        if len(self.track) == MAX_TRACK:
+            assert not self is old
+            
+            closest_agent = None
+            closest_projection = None
+
+            def get_projection(agent):
+                assert isinstance(agent, Agent)
+
+                saw_latest = np.linalg.norm(agent.track[MAX_TRACK - 1] - self.track[MAX_TRACK - 1]) < VISION  
+                saw_oldest = np.linalg.norm(agent.track[0] - self.track[0]) < VISION  
+
+                return [
+                    np.vdot(agent.p - self.p, self.e) <= 0,
+                    not saw_oldest and not saw_latest, 
+                    saw_oldest and saw_latest, 
+                    max
+                    (
+                        [100] + 
+                        (
+                            [
+                                np.linalg.norm(agent.track[i] - self.track[i]) 
+                                for i in range(MAX_TRACK)
+                                if np.vdot(agent.p - self.p, self.e) > 0
+                            ]
+                        )
+                    )
+                ]
+
+            for agent in agents:
+                if agent is old:
+                    continue
+
+                projection = get_projection(agent)
+                if closest_agent is None or projection < closest_projection:
+                    closest_agent = agent
+                    closest_projection = projection
+
+            distance_to_closest = np.linalg.norm(closest_agent.p - self.p) 
+            if distance_to_closest < VISION and np.vdot(closest_agent.p - self.p, self.e) > 0:
+                self.v = min(self.vmax * distance_to_closest / VISION, closest_agent.v)
+                print(f'{self.color} goes after {closest_agent.color} and slows down to {self.v}')
+            else:
+                self.v = self.vmax
+
+        self.track += [self.p]
+        if (len(self.track) > MAX_TRACK):
+            assert len(self.track) == MAX_TRACK + 1
+            self.track = self.track[1:]
+
+
         de = 0
 
         f = field_func(self.p[0], self.p[1], t)
@@ -36,7 +94,7 @@ class Agent:
 
                 return z * self.mu
 
-            de = np.sign(df + chi(f - TARGET_ISOLINE))
+            de = np.sign(df + self.v * chi(f - TARGET_ISOLINE))
 
         self.angle -= de * self.we
         self.e = np.array([math.cos(self.angle), math.sin(self.angle)])
@@ -46,3 +104,5 @@ class Agent:
         self.p += self.e * self.v
 
         self.prev_f = f
+
+        return self
